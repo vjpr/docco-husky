@@ -11,7 +11,7 @@ task 'install', 'install the `docco` command into /usr/local (or --prefix)', (op
   lib  = base + '/lib/docco-husky'
   exec([
     'mkdir -p ' + lib
-    'cp -rf bin README resources vendor lib ' + lib
+    'cp -rf bin README.md resources vendor lib ' + lib
     'ln -sf ' + lib + '/bin/generate ' + base + '/bin/docco-husky'
   ].join(' && '), (err, stdout, stderr) ->
    if err then console.error stderr

@@ -26,6 +26,26 @@ div.dox
 							span.dox_type #{type}
 						if tag.description
 							span #{tag.description}
+				
+				if tag.type == "constructor" || tag.type == "implements"
+					if !hasParams
+						div.dox_tag_title Class
+					if tag.code
+						code #{tag.code}
+
+				if tag.type == "typedef"
+					if !hasParams
+						div.dox_tag_title Type Definitions
+						- hasParams = true
+					div.dox_tag_detail 
+						span #{tag.name} 
+						if tag.types
+							each type in tag.types 
+								span.dox_type #{type}
+						if tag.description
+							span - #{tag.description}
+						if tag.code
+							code #{tag.code}
 
 				if tag.type == "type"
 					if !hasType

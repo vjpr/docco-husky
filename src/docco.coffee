@@ -89,27 +89,60 @@ parse = (source, code) ->
     sections.push docs_text: docs, code_text: code
   for line in lines
     if line.match(language.multi_start_matcher) or in_multi
-
       if has_code
         save docs_text, code_text
         has_code = docs_text = code_text = ''
 
-      # Found the start of a multiline comment line, set in_multi to true
-      # and begin accumulating lines untime we reach a line that finishes
+      leaving_multi = false
+
+      # Begin accumulating lines untime we reach a line that finishes
       # the multiline comment
+      if language.name is 'coffee-script'
+        # If we are using CoffeeScript we must convert our comments to javascript
+        # so dox can understand them.
+        tmp_line = line
+        if not in_multi
+          # If we have just begun a multiline comment we need to try convert start, but
+          # also finish as it might be a single line comment.
+          tmp_line = tmp_line.replace(/^[\s]*(###)/, '/*')
+          # If we find another set of ###, its a one line herecomment.
+          leaving_multi = tmp_line.match(/###$/)?
+          tmp_line = tmp_line.replace(/###$/, '*\/')
+        else
+          # otherwise we only convert it to and end tag
+          tmp_line = tmp_line.replace(/###$/, '*\/')
+          leaving_multi = line.match(language.multi_end_matcher)?
+        multi_accum += tmp_line + '\n'
+      else
+        multi_accum += line + '\n'
+
+      # We have finished re-writing comments to Dox format and 
+      # can now set in_multi to true to indicate that we are in a multi-line comment block.
       in_multi = true
-      multi_accum += line + '\n'
 
       # If we reached the end of a multiline comment, template the result
       # and set in_multi to false, reset multi_accum
-      if line.match(language.multi_end_matcher)
+      if leaving_multi
         in_multi = false
-        try
-          parsed = dox.parseComments( multi_accum )[0]
-          docs_text += dox_template(parsed)
-        catch error
-          console.log "Error parsing comments with Dox: #{error}"
-          docs_text = multi_accum
+        multi_accum = multi_accum.replace(/^[\s]*(\/\*[\s]*)/, '')
+        multi_accum = multi_accum.replace(/\*\/[\s]*$/, '')
+        docs_text = multi_accum
+        # try
+        #   # Dox seems to require the first line be a summary. If this is not the case we
+        #   # rewrite it.
+        #   if multi_accum.match /^[\s]*\/\*\*[\s]*@/
+        #     multi_accum = multi_accum.replace(/^[\s]*(\/\*\*[\s]*)/, '/**\n_\n')
+        #   parsed = dox.parseComments( multi_accum )[0]
+        #   # If parsed contains anything that was not supported we should try and add it manually.
+        #   for tag, i in parsed?.tags
+        #     switch tag.type
+        #       when 'typedef', 'constructor', 'implements'
+        #         tag.code = multi_accum.replace(/\*\*/, '')
+        #   if parsed?.tags?
+        #     docs_text += dox_template(parsed)
+        # catch error
+        #   console.log "Error parsing comments with Dox: #{error}"
+        #   docs_text = multi_accum
         multi_accum = ''
 
     else if line.match(language.comment_matcher) and not line.match(language.comment_filter)
@@ -270,7 +303,7 @@ walk     = require 'walk'
 # add another language to Docco's repertoire, add it here.
 languages =
   '.coffee':
-    name: 'coffee-script', symbol: '#'
+    name: 'coffee-script', symbol: '#', multi_start: "###", multi_end: "###"
   '.js':
     name: 'javascript', symbol: '//', multi_start: "/*", multi_end: "*/"
   '.rb':
@@ -301,11 +334,28 @@ for ext, l of languages
 
   # Since we'll only handle /* */ multilin comments for now, test for them explicitly
   # Otherwise set the multi matchers to an unmatchable RegEx
-  if l.multi_start == "/*"
+  if l.multi_start is '###'
+    # l.multi_start_matcher = new RegExp(/^[\s]*\/\*[.]*/)
+
+    l.multi_start_matcher = new RegExp ///
+      ^[\s]*
+      \#\#\#
+      [.]*
+    ///
+  else if l.multi_start == "/*"
     l.multi_start_matcher = new RegExp(/^[\s]*\/\*[.]*/)
   else
     l.multi_start_matcher = new RegExp(/a^/)
-  if l.multi_end == "*/"
+  
+  if l.multi_end is '###'
+    # l.multi_end_matcher = new RegExp(/.*\*\/.*/)
+
+    l.multi_end_matcher = new RegExp /// 
+      .*
+      \#\#\#
+      $ # ends with ###
+    ///
+  else if l.multi_end == "*/"
     l.multi_end_matcher = new RegExp(/.*\*\/.*/)
   else
     l.multi_end_matcher = new RegExp(/a^/)
